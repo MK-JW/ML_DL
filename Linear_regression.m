@@ -3,8 +3,8 @@ clear
 %% data process
 data_f = readmatrix('world-happiness-report-2017.csv');
 data = data_f(:,3:end);
-y_train = data(:,1);
-x_train = data(:,4);
+y_train = data(:,4);
+x_train = data(:,6);
 figure(1)
 scatter(x_train,y_train,10,'r','filled');
 %% linear regression
@@ -13,7 +13,7 @@ alpha = 0.8; %根据数据手动调整
 tolerance = 1*10^-6;
 loss = [];
 k = 0;
-w_k = 0; b_k = 0;
+w_k = 0; b_k = 0;   
 y_prediction = w_k*x_train + b_k;
 cost = (1/(2*m))*sum((y_prediction - y_train).^2);
 dw_k = -(1/m)*(y_prediction - y_train)'*x_train;
@@ -51,5 +51,3 @@ figure(2)
 q = max(size(loss));
 x_loss = 1:q; y_loss = loss;
 plot(x_loss,y_loss,'b','linewidth',1.5)
-
-gti 
