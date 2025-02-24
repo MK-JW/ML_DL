@@ -62,7 +62,8 @@ while(norm(w_k - w_previous)>tolerance || norm(b_k - b_previous)>tolerance)
 end
 figure(1)
 hold on
-x = 0:0.01:2;
+% x = 0:0.01:2;
+x = [min(x_train):0.1:max(x_train)];
 y = w_k*x + b_k;
 plot(x,y,'k','linewidth',1.5)
 hold off
@@ -88,7 +89,7 @@ for i = 1:r
 end
 surf(X,Y,loss_t,'FaceAlpha',0.5)
 hold on
-plot3(w,b,loss,'b-o','linewidth',1.5)
+plot3(w,b,loss ,'b-o','linewidth',2)
 hold off
 % 跑个示例代码学一下surf
 % [X,Y] = meshgrid(-5:.5:5);
@@ -167,6 +168,7 @@ function [alpha_acceptable] = Armijo_wolfe(y_train, x_train, x_current, d_curren
         end
     end
     if((Armijo_condition >0)||(wolfe_condition>0))
+%         alpha_acceptable = 0.01;
         alpha_acceptable = NaN;
     end
 end

@@ -8,7 +8,7 @@ x_train = data(:,4:2:6);
 figure(1)
 scatter3(x_train(:,1), x_train(:,2), y_train,10,'r','filled')
 xlabel('Economy')
-ylabel('Family')
+ylabel('Health&life')
 zlabel('Happiness')
 grid on
 %% linear regression
@@ -56,5 +56,5 @@ hold off
 figure(2)
 q = max(size(loss));
 plot(1:q, loss, 'b','linewidth',1.5)
-
-
+xlabel("interation")
+ylabel("loss value")
