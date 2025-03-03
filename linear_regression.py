@@ -85,19 +85,20 @@ print(type(loss))
 q,p = loss.shape
 print(w_k,b_k)
 
+
 # 执行绘图
 if column == 2:
     plt.figure(1)
     plt.scatter(x_train, y_train, color = 'r', marker = 'o')
     plt.xlabel('x_train')
     plt.ylabel('y_train')
-    plt.plot(np.arange(x_train.min(), x_train.max(), 0.1), \
+    plt.plot(np.arange(x_train.min(), x_train.max(), 0.1), 
              w_k*np.arange(x_train.min(), x_train.max(), 0.1) + b_k, color = 'k')
     plt.figure(2)
     plt.scatter(x_test, y_test, color = 'b', marker = 'o')
     plt.xlabel('x_test')
     plt.ylabel('y_test')
-    plt.plot(np.arange(x_test.min(), x_test.max(), 0.1),\
+    plt.plot(np.arange(x_test.min(), x_test.max(), 0.1),
               w_k*np.arange(x_test.min(), x_test.max(), 0.1) + b_k, color = 'k')
     plt.figure(3)
     plt.plot(np.arange(q).reshape(q,1), loss, color = 'b')
