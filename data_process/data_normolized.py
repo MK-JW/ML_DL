@@ -3,7 +3,7 @@ __author__ = 'Minjinwu'
 import numpy as np
 
 
-def Data_normolized(x_train):
+def Data_normalized(x_train):
     
     # 转化数据为浮点型
     x_train = np.copy(x_train).astype(float)
