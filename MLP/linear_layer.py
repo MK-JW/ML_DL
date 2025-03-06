@@ -66,7 +66,7 @@ class Linear_layer:
     # 输出层输出
     def output_layer(self, hidden_layeroutput, o_current, neurons_num):
 
-        # o_current--输出层对应权重与偏置向量
+        # o_current--输出层对应权重与偏置向量，  neurons_num--隐藏层神经元个数
 
         prediction = np.dot(hidden_layeroutput, o_current[0:neurons_num,:]) + o_current[-1,:]
 
@@ -118,7 +118,7 @@ class Linear_layer:
         do_current = self.output_gradient(hidden_output, prediction, neurons_num)
         dh_current = self.hidden_gradient(o_current, prediction, neurons_num)
         o_next = o_current - alpha*do_current
-        h_next = h_current  - alpah*dh_current
+        h_next = h_current  - alpha*dh_current
 
         return h_next, o_next
 
