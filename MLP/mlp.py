@@ -1,6 +1,8 @@
 __author__ = 'minjinwu'
 
 
+import sys
+print(sys.path)
 import os 
 import torch
 import numpy as np
@@ -43,6 +45,8 @@ for i in range(epoch):
         
         num_batches += 1
         giveup = True
+
+    else: giveup = False
 
     for batch_index in range(num_batches):
 
