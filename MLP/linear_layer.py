@@ -74,12 +74,12 @@ class Linear_layer:
     
 
     # 输出层梯度
-    def output_gradient(self, hidden_layeroutput, prediction, neurons_num):
+    def output_gradient(self, hidden_layeroutput, prediction):
 
         # d_o--输出层权重梯度，  d_ob--输出层偏置梯度
 
         d_o = (1/self.sample_num)*np.dot((prediction - self.y_train).T, hidden_layeroutput).T
-        d_ob = (1/self.sample_num)*np.dot(((prediction - self.y_train).T, np.ones(neurons_num, 1)))
+        d_ob = (1/self.sample_num)*np.dot((prediction - self.y_train).T, np.ones((self.sample_num, 1))).T
         do_current = np.vstack((d_o, d_ob))
 
         return do_current
@@ -90,14 +90,14 @@ class Linear_layer:
 
         # d_h--隐藏层权重梯度，  d_hb--隐藏层偏置梯度
 
-        d_h = (1/self.sample_num)*((prediction - self.y_train)@o_current[0:neurnos_num, :].T@self.x_train).T
-        d_hb = (1/self.sample_num)*((prediction - self.y_train)@o_current[0:neurnos_num, :].T@np.ones((neurnos_num, 1))).T
+        d_h = (1/self.sample_num)*(((prediction - self.y_train)@o_current[0:neurnos_num, :].T).T@self.x_train).T
+        d_hb = (1/self.sample_num)*(((prediction - self.y_train)@o_current[0:neurnos_num, :].T).T@np.ones((self.sample_num, 1))).T
         dh_current = np.vstack((d_h, d_hb))
 
         return dh_current
     
 
-    # 前向传播
+    # 前向传播 
     def forward_propagation(self, h_current, o_current, neurons_num):
 
         hidden_output = self.hidden_layer(h_current)
@@ -115,7 +115,7 @@ class Linear_layer:
 
         hidden_output = self.hidden_layer(h_current)
         prediction = self.output_layer(hidden_output, o_current, neurons_num)
-        do_current = self.output_gradient(hidden_output, prediction, neurons_num)
+        do_current = self.output_gradient(hidden_output, prediction)
         dh_current = self.hidden_gradient(o_current, prediction, neurons_num)
         o_next = o_current - alpha*do_current
         h_next = h_current  - alpha*dh_current
