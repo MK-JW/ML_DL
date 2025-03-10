@@ -42,15 +42,13 @@ class Linear_layer:
     
 
     # 获取损失函数变化
-    def get_loss(self, cost):
+    def get_loss(self, cost, loss):
 
         # loss--损失函数记录
         
-        loss = np.array([])
+        loss_container = np.append(loss, cost)
 
-        loss = np.append(loss, cost)
-
-        return loss
+        return loss_container
     
 
     # 隐藏层输出
@@ -98,14 +96,14 @@ class Linear_layer:
     
 
     # 前向传播 
-    def forward_propagation(self, h_current, o_current, neurons_num):
+    def forward_propagation(self, h_current, o_current, neurons_num, loss_container):
 
         hidden_output = self.hidden_layer(h_current)
         prediction = self.output_layer(hidden_output, o_current, neurons_num)
         cost = self.get_cost(prediction)
-        loss = self.get_loss(cost)
+        loss_container = self.get_loss(cost, loss_container)
 
-        return prediction, loss
+        return prediction, loss_container
 
 
     # 反向传播
@@ -121,4 +119,4 @@ class Linear_layer:
         h_next = h_current  - alpha*dh_current
 
         return h_next, o_next
-
+    
