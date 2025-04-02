@@ -15,6 +15,7 @@ import torch.nn.functional as F
 
 ## 词嵌入与位置编码
 class Embedding(nn.Module):
+    
     def __init__(self, vocab_size, embedding_dim, max_len=512, shared_weight=None):
         """
         词嵌入类，支持共享词嵌入和位置编码。
