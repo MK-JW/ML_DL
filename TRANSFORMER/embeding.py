@@ -13,7 +13,7 @@ class Embedding(nn.Module):
         词嵌入类，支持共享词嵌入和位置编码。
         
         参数:
-        - vocab_size: 词汇表大小   每个词对应的索引
+        - vocab_size: 词汇表大小   总共有多少个词
         - embedding_dim: 词嵌入维度  每一个词转换为向量的维度大小
         - max_len: 句子最大长度（用于位置编码） 一次识别最多多少个词,少会padding,多会忽略
         - shared_weight: 可选，是否共享已有的嵌入层 (nn.Embedding)
@@ -110,7 +110,7 @@ max_len = 5  # 假设句子的最大长度为5
 embedding_layer = Embedding(vocab_size, embedding_dim, max_len)
 
 # 输入为单词
-input_words = ["apple", "banana", "cherry", "date", "elderberry"]  # 一个例子句子
+input_words = ["apple", "banana", "cherry", "date"]  # 一个例子句子
 
 # 将单词转换为词索引
 input_ids = torch.tensor([word_to_index[word] for word in input_words]).unsqueeze(0)  # 转换为 (1, seq_len)
