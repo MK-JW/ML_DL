@@ -61,6 +61,7 @@ class MultiHeadAttention(nn.Module):
         return x.permute(0, 2, 1, 3)  # 重新排列维度，以适应多头计算
     
 
+
     def scaled_dot_product_attention(self, Q, K, V, mask=None):
 
         """
@@ -86,6 +87,7 @@ class MultiHeadAttention(nn.Module):
         
         return output
     
+
 
     def forward(self, Q, K, V, mask=None):
 
@@ -129,6 +131,8 @@ class MultiHeadAttention(nn.Module):
         # 通过最后的线性层
         output = self.W_o(attention_output)
         return output
+
+
 
 if __name__ == "__main__":
     batch_size = 2
