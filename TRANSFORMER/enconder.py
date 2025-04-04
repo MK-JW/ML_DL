@@ -13,190 +13,6 @@ import torch.nn.functional as F
 # 模型的构建
 
 
-## 词嵌入与位置编码
-class Embedding(nn.Module):
-    
-    def __init__(self, vocab_size, embedding_dim, max_len=512, shared_weight=None):
-        """
-        词嵌入类，支持共享词嵌入和位置编码。
-        
-        参数:
-        - vocab_size: 词汇表大小   每个词对应的索引
-        - embedding_dim: 词嵌入维度  每一个词转换为向量的维度大小
-        - max_len: 句子最大长度（用于位置编码） 一次识别最多多少个词
-        - shared_weight: 可选，是否共享已有的嵌入层 (nn.Embedding)
-        """
-        super(Embedding, self).__init__()
-
-        # 如果传入 shared_weight，则使用共享的嵌入层
-        if shared_weight is not None:
-            self.embedding = shared_weight  # 共享权重
-        else:
-            self.embedding = nn.Embedding(vocab_size, embedding_dim)
-
-        # 位置编码
-        self.positional_encoding = self.create_positional_encoding(max_len, embedding_dim)
-
-    def create_positional_encoding(self, max_len, embedding_dim):
-        """
-        生成位置编码，采用 Transformer 的正弦余弦位置编码方法。
-        """
-        pos_enc = torch.zeros(max_len, embedding_dim)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, embedding_dim, 2).float() * (-math.log(10000.0) / embedding_dim))
-
-        pos_enc[:, 0::2] = torch.sin(position * div_term)
-        pos_enc[:, 1::2] = torch.cos(position * div_term)
-
-        return pos_enc.unsqueeze(0)  # (1, max_len, embedding_dim) 方便 batch 处理
-
-    def forward(self, input_ids):
-        """
-        前向传播：
-        - 词索引 -> 词嵌入
-        - 词嵌入 + 位置编码
-        输入:
-        - input_ids: (batch_size, seq_len) 形状的张量，表示词索引
-        
-        输出:
-        - 嵌入后的张量，形状为 (batch_size, seq_len, embedding_dim)
-        """
-        embedded = self.embedding(input_ids)  # 词嵌入
-        seq_len = input_ids.size(1)
-        positional_enc = self.positional_encoding[:, :seq_len, :].to(embedded.device)  # 取前 seq_len 个位置编码
-
-        return embedded + positional_enc  # 词嵌入 + 位置编码
-    
-# 设置参数
-vocab_size = 100  # 假设词汇表大小为100
-embedding_dim = 16  # 词嵌入维度为16
-max_len = 10  # 句子最大长度
-
-# 创建词嵌入模型
-embedding_layer = Embedding(vocab_size, embedding_dim, max_len)
-
-# 生成测试输入（batch_size=2, seq_len=5），随机选择词索引
-input_ids = torch.randint(0, vocab_size, (2, 5))
-print("输入词索引:")
-print(input_ids)
-
-# 前向传播
-output = embedding_layer(input_ids)
-print("\n输出词嵌入+位置编码:")
-print(output)
-
-
-## 多头注意力机制
-class MultiHeadAttention(nn.Module):
-    def __init__(self, d_model, num_heads):
-        """
-        多头注意力机制。
-        
-        参数：
-        - d_model: 词向量的维度（例如 512)S
-        - num_heads: 头的数量（例如 8)
-        """
-        super(MultiHeadAttention, self).__init__()
-        
-        assert d_model % num_heads == 0, "d_model 必须能被 num_heads 整除"
-        
-        self.d_model = d_model  # 词向量维度
-        self.num_heads = num_heads  # 头的数量
-        self.depth = d_model // num_heads  # 每个头的维度
-        
-        # 定义 Q, K, V 的线性变换
-        self.W_q = nn.Linear(d_model, d_model)
-        self.W_k = nn.Linear(d_model, d_model)
-        self.W_v = nn.Linear(d_model, d_model)
-        
-        # 最终输出层
-        self.W_o = nn.Linear(d_model, d_model)
-        
-    def split_heads(self, x, batch_size):
-        """
-        分割输入张量，使其适配多头注意力。
-        
-        形状变化：
-        (batch_size, seq_len, d_model) -> (batch_size, num_heads, seq_len, depth)
-        """
-        x = x.view(batch_size, -1, self.num_heads, self.depth)
-        return x.permute(0, 2, 1, 3)  # 重新排列维度，以适应多头计算
-    
-    def scaled_dot_product_attention(self, Q, K, V, mask=None):
-        """
-        计算缩放点积注意力。
-        
-        形状变化：
-        - Q, K, V: (batch_size, num_heads, seq_len, depth)
-        - 输出: (batch_size, num_heads, seq_len, depth)
-        """
-        d_k = Q.size(-1)  # 获取 K 的维度 depth
-        scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(d_k)  # 计算注意力分数
-        
-        if mask is not None:
-            scores = scores.masked_fill(mask == 0, -1e9)  # 对填充部分进行掩码
-        
-        attention_weights = torch.softmax(scores, dim=-1)  # 计算注意力权重
-        output = torch.matmul(attention_weights, V)  # 加权求和
-        
-        return output
-    
-    def forward(self, Q, K, V, mask=None):
-        """
-        前向传播。
-        
-        输入：
-        - Q, K, V: (batch_size, seq_len, d_model)
-        - mask: (batch_size, 1, 1, seq_len)，可选
-        
-        输出：
-        - (batch_size, seq_len, d_model)
-        """
-        batch_size = Q.shape[0]
-        
-        # 通过线性层计算 Q, K, V
-        Q = self.W_q(Q)
-        K = self.W_k(K)
-        V = self.W_v(V)
-        
-        # 分割为多个头
-        Q = self.split_heads(Q, batch_size)
-        K = self.split_heads(K, batch_size)
-        V = self.split_heads(V, batch_size)
-        
-        # 计算注意力
-        attention_output = self.scaled_dot_product_attention(Q, K, V, mask)
-        
-        # 重新排列多头数据，使其合并回单一向量
-        attention_output = attention_output.permute(0, 2, 1, 3).contiguous()
-        
-        # 变回 (batch_size, seq_len, d_model)
-        attention_output = attention_output.view(batch_size, -1, self.d_model)
-        
-        # 通过最后的线性层
-        output = self.W_o(attention_output)
-        return output
-
-if __name__ == "__main__":
-    batch_size = 2
-    seq_len = 5
-    d_model = 16
-    num_heads = 4
-    
-    mha = MultiHeadAttention(d_model, num_heads)
-    
-    Q = torch.rand(batch_size, seq_len, d_model)
-    K = torch.rand(batch_size, seq_len, d_model)
-    V = torch.rand(batch_size, seq_len, d_model)
-    
-    output = mha(Q, K, V)
-    print("输入Q: ", Q.shape)
-    print("输入K: ", K.shape)
-    print("输入V: ", V.shape)
-    print("输出: ", output.shape)
-
-
-
 # ## 编码器
 
 # class PositionalEncoding(nn.Module):
@@ -278,6 +94,7 @@ if __name__ == "__main__":
     
 
 # ## 解码器
+
 # class MultiHeadSelfAttentionDecoder(nn.Module):
 #     def __init__(self, embedding_dim, num_heads):
 #         super(MultiHeadSelfAttentionDecoder, self).__init__()
@@ -298,6 +115,7 @@ if __name__ == "__main__":
 #         output = torch.matmul(attention, v)
 #         output = output.permute(0, 2, 1, 3).reshape(batch_size, seq_length, embedding_dim)
 #         return self.out_proj(output)
+
 
 # class TransformerDecoderLayer(nn.Module):
 #     def __init__(self, embedding_dim, num_heads, hidden_dim):
@@ -340,7 +158,6 @@ if __name__ == "__main__":
 #         for layer in self.layers:
 #             x = layer(x, encoder_output, src_mask, tgt_mask)
 #         return x
-
 
 
 
