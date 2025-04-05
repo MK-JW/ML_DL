@@ -1,338 +1,109 @@
 __author__ = 'minjinwu'
 
-# 导入所需要的包
 import math
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-
-# 设置超参数
-
-# 导入数据
-
-# 模型的构建
+import torch.functional as F
+from embedding import Embedding
+from multi_head_selfattention import MultiHeadAttention
+from feed_forward import FeedForward
 
 
-# ## 编码器
+# 编码器类实现
 
-# class PositionalEncoding(nn.Module):
-#     def __init__(self, embedding_dim, max_len=5000):
-#         super(PositionalEncoding, self).__init__()
-#         pe = torch.zeros(max_len, embedding_dim)
-#         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-#         div_term = torch.exp(torch.arange(0, embedding_dim, 2).float() * (-math.log(10000.0) / embedding_dim))
-#         pe[:, 0::2] = torch.sin(position * div_term)
-#         pe[:, 1::2] = torch.cos(position * div_term)
-#         pe = pe.unsqueeze(0)
-#         self.register_buffer('pe', pe)
+## 编码器层
+class EncoderLayer(nn.Module):
 
-#     def forward(self, x):
-#         return x + self.pe[:, :x.size(1)]
 
-# class MultiHeadSelfAttention(nn.Module):
-#     def __init__(self, embedding_dim, num_heads):
-#         super(MultiHeadSelfAttention, self).__init__()
-#         assert embedding_dim % num_heads == 0, "Embedding dimension must be divisible by number of heads"
-#         self.num_heads = num_heads
-#         self.head_dim = embedding_dim // num_heads
-#         self.qkv_proj = nn.Linear(embedding_dim, embedding_dim * 3)
-#         self.out_proj = nn.Linear(embedding_dim, embedding_dim)
+    def __init__(self, d_model, num_heads, d_ff, dropout=0.1):
+        """
+        一个 Transformer 编码器层，包含多头注意力和前馈神经网络。
         
-#     def forward(self, x, mask=None):
-#         batch_size, seq_length, embedding_dim = x.shape
-#         qkv = self.qkv_proj(x).reshape(batch_size, seq_length, 3, self.num_heads, self.head_dim)
-#         q, k, v = qkv.permute(2, 0, 3, 1, 4)  # [3, batch, heads, seq_len, head_dim]
-#         scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.head_dim)
-#         if mask is not None:
-#             scores = scores.masked_fill(mask == 0, float('-inf'))
-#         attention = F.softmax(scores, dim=-1)
-#         output = torch.matmul(attention, v)
-#         output = output.permute(0, 2, 1, 3).reshape(batch_size, seq_length, embedding_dim)
-#         return self.out_proj(output)
+        参数:
+        - d_model: 词向量的维度
+        - num_heads: 多头注意力的头数
+        - d_ff: 前馈网络的隐藏层维度
+        - dropout: dropout 率
+        """
+        super(EncoderLayer, self).__init__()
 
-# class FeedForward(nn.Module):
-#     def __init__(self, embedding_dim, hidden_dim):
-#         super(FeedForward, self).__init__()
-#         self.fc1 = nn.Linear(embedding_dim, hidden_dim)
-#         self.fc2 = nn.Linear(hidden_dim, embedding_dim)
-#         self.dropout = nn.Dropout(0.1)
+        self.multihead_attention = MultiHeadAttention(d_model, num_heads)
+        self.feed_forward = FeedForward(d_model, d_ff, dropout)
+        self.layer_norm1 = nn.LayerNorm(d_model)  # 用于多头注意力后的层归一化
+        self.layer_norm2 = nn.LayerNorm(d_model)  # 用于前馈网络后的层归一化
+        self.dropout = nn.Dropout(dropout)
         
-#     def forward(self, x):
-#         return self.fc2(self.dropout(F.relu(self.fc1(x))))
 
-# class TransformerEncoderLayer(nn.Module):
-#     def __init__(self, embedding_dim, num_heads, hidden_dim):
-#         super(TransformerEncoderLayer, self).__init__()
-#         self.attention = MultiHeadSelfAttention(embedding_dim, num_heads)
-#         self.norm1 = nn.LayerNorm(embedding_dim)
-#         self.ffn = FeedForward(embedding_dim, hidden_dim)
-#         self.norm2 = nn.LayerNorm(embedding_dim)
-#         self.dropout = nn.Dropout(0.1)
-        
-#     def forward(self, x, mask=None):
-#         attn_output = self.attention(x, mask)
-#         x = self.norm1(x + self.dropout(attn_output))
-#         ffn_output = self.ffn(x)
-#         x = self.norm2(x + self.dropout(ffn_output))
-#         return x
+    def forward(self, x, mask=None):
 
-# class TransformerEncoder(nn.Module):
-#     def __init__(self, vocab_size, embedding_dim, num_heads, hidden_dim, num_layers, max_len=5000):
-#         super(TransformerEncoder, self).__init__()
-#         self.embedding = nn.Embedding(vocab_size, embedding_dim)
-#         self.pos_encoding = PositionalEncoding(embedding_dim, max_len)
-#         self.layers = nn.ModuleList([
-#             TransformerEncoderLayer(embedding_dim, num_heads, hidden_dim) for _ in range(num_layers)
-#         ])
+        """
+        前向传播：将输入经过多头注意力和前馈网络。
         
-#     def forward(self, x, mask=None):
-#         x = self.embedding(x)
-#         x = self.pos_encoding(x)
-#         for layer in self.layers:
-#             x = layer(x, mask)
-#         return x
+        输入:
+        - x: (batch_size, seq_len, d_model)
+        - mask: (batch_size, 1, 1, seq_len)，可选
+        
+        输出:
+        - 编码器层的输出 (batch_size, seq_len, d_model)
+        """
+        
+        # 多头注意力层
+        attn_output = self.multihead_attention(x, x, x, mask) # 这里面x,x,x代表自注意力机制，即QKV都是通过x线性变换得到
+
+        x = self.layer_norm1(attn_output + x)  # 残差连接 + 层归一化
+
+        # 前馈网络
+        ff_output = self.feed_forward(x)
+        
+        x = self.layer_norm2(ff_output + x)  # 残差连接 + 层归一化
+
+        return x
     
 
-# ## 解码器
 
-# class MultiHeadSelfAttentionDecoder(nn.Module):
-#     def __init__(self, embedding_dim, num_heads):
-#         super(MultiHeadSelfAttentionDecoder, self).__init__()
-#         assert embedding_dim % num_heads == 0, "Embedding dimension must be divisible by number of heads"
-#         self.num_heads = num_heads
-#         self.head_dim = embedding_dim // num_heads
-#         self.qkv_proj = nn.Linear(embedding_dim, embedding_dim * 3)
-#         self.out_proj = nn.Linear(embedding_dim, embedding_dim)
+## 多层编码器叠加
+class Encoder(nn.Module):
+
+    
+    def __init__(self, vocab_size, embedding_dim, num_layers, num_heads, d_ff, max_len=512, dropout=0.1):
+        """
+        Transformer 编码器。
         
-#     def forward(self, x, mask=None):
-#         batch_size, seq_length, embedding_dim = x.shape
-#         qkv = self.qkv_proj(x).reshape(batch_size, seq_length, 3, self.num_heads, self.head_dim)
-#         q, k, v = qkv.permute(2, 0, 3, 1, 4)  # [3, batch, heads, seq_len, head_dim]
-#         scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.head_dim)
-#         if mask is not None:
-#             scores = scores.masked_fill(mask == 0, float('-inf'))
-#         attention = F.softmax(scores, dim=-1)
-#         output = torch.matmul(attention, v)
-#         output = output.permute(0, 2, 1, 3).reshape(batch_size, seq_length, embedding_dim)
-#         return self.out_proj(output)
+        参数:
+        - vocab_size: 词汇表大小
+        - embedding_dim: 词嵌入维度
+        - num_layers: 编码器的层数（有多少个编码器堆叠）
+        - num_heads: 多头注意力的头数
+        - d_ff: 前馈网络的隐藏层维度
+        - max_len: 句子的最大长度
+        - dropout: dropout 率
+        """
+        super(Encoder, self).__init__()
+
+        # 词嵌入和位置编码
+        self.embedding = Embedding(vocab_size, embedding_dim, max_len)
+
+        # 堆叠多个编码器层
+        self.layers = nn.ModuleList([
+            EncoderLayer(embedding_dim, num_heads, d_ff, dropout)
+            for _ in range(num_layers)
+        ])
 
 
-# class TransformerDecoderLayer(nn.Module):
-#     def __init__(self, embedding_dim, num_heads, hidden_dim):
-#         super(TransformerDecoderLayer, self).__init__()
-#         self.self_attention = MultiHeadSelfAttentionDecoder(embedding_dim, num_heads)
-#         self.encoder_decoder_attention = MultiHeadSelfAttention(embedding_dim, num_heads)
-#         self.norm1 = nn.LayerNorm(embedding_dim)
-#         self.norm2 = nn.LayerNorm(embedding_dim)
-#         self.ffn = FeedForward(embedding_dim, hidden_dim)
-#         self.norm3 = nn.LayerNorm(embedding_dim)
-#         self.dropout = nn.Dropout(0.1)
-
-#     def forward(self, x, encoder_output, src_mask=None, tgt_mask=None):
-#         # Self-attention in decoder
-#         self_attn_output = self.self_attention(x, tgt_mask)
-#         x = self.norm1(x + self.dropout(self_attn_output))
-
-#         # Encoder-decoder attention
-#         encoder_decoder_attn_output = self.encoder_decoder_attention(x, src_mask)
-#         x = self.norm2(x + self.dropout(encoder_decoder_attn_output))
-
-#         # Feed Forward Network
-#         ffn_output = self.ffn(x)
-#         x = self.norm3(x + self.dropout(ffn_output))
-
-#         return x
-
-# class TransformerDecoder(nn.Module):
-#     def __init__(self, vocab_size, embedding_dim, num_heads, hidden_dim, num_layers, max_len=5000):
-#         super(TransformerDecoder, self).__init__()
-#         self.embedding = nn.Embedding(vocab_size, embedding_dim)
-#         self.pos_encoding = PositionalEncoding(embedding_dim, max_len)
-#         self.layers = nn.ModuleList([
-#             TransformerDecoderLayer(embedding_dim, num_heads, hidden_dim) for _ in range(num_layers)
-#         ])
+    def forward(self, x, mask=None):
+        """
+        前向传播：将输入通过多个编码器层。
         
-#     def forward(self, x, encoder_output, src_mask=None, tgt_mask=None):
-#         x = self.embedding(x)
-#         x = self.pos_encoding(x)
-#         for layer in self.layers:
-#             x = layer(x, encoder_output, src_mask, tgt_mask)
-#         return x
-
-
-
-
-# ## 完整的transformer代码
-
-# # 位置编码 (Positional Encoding)
-# class PositionalEncoding(nn.Module):
-#     def __init__(self, embedding_dim, max_len=5000):
-#         super(PositionalEncoding, self).__init__()
-#         pe = torch.zeros(max_len, embedding_dim)
-#         for pos in range(max_len):
-#             for i in range(0, embedding_dim, 2):
-#                 pe[pos, i] = math.sin(pos / (10000 ** (i / embedding_dim)))
-#                 pe[pos, i + 1] = math.cos(pos / (10000 ** (i / embedding_dim)))
-#         pe = pe.unsqueeze(0).transpose(0, 1)  # [max_len, 1, embedding_dim]
-#         self.register_buffer('pe', pe)
-
-#     def forward(self, x):
-#         return x + self.pe[:x.size(0), :]
-
-# # 多头自注意力机制
-# class MultiHeadAttention(nn.Module):
-#     def __init__(self, embedding_dim, num_heads):
-#         super(MultiHeadAttention, self).__init__()
-#         assert embedding_dim % num_heads == 0, "Embedding dimension must be divisible by number of heads"
-#         self.num_heads = num_heads
-#         self.head_dim = embedding_dim // num_heads
-#         self.qkv_proj = nn.Linear(embedding_dim, embedding_dim * 3)
-#         self.out_proj = nn.Linear(embedding_dim, embedding_dim)
-
-#     def forward(self, x, mask=None):
-#         batch_size, seq_len, embedding_dim = x.shape
-#         qkv = self.qkv_proj(x).reshape(batch_size, seq_len, 3, self.num_heads, self.head_dim)
-#         q, k, v = qkv.permute(2, 0, 3, 1, 4)  # [3, batch, heads, seq_len, head_dim]
-#         scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.head_dim)
-#         if mask is not None:
-#             scores = scores.masked_fill(mask == 0, float('-inf'))
-#         attention = F.softmax(scores, dim=-1)
-#         output = torch.matmul(attention, v)
-#         output = output.permute(0, 2, 1, 3).reshape(batch_size, seq_len, embedding_dim)
-#         return self.out_proj(output)
-
-# # 前馈神经网络（Feed-Forward Network）
-# class FeedForward(nn.Module):
-#     def __init__(self, embedding_dim, hidden_dim):
-#         super(FeedForward, self).__init__()
-#         self.fc1 = nn.Linear(embedding_dim, hidden_dim)
-#         self.fc2 = nn.Linear(hidden_dim, embedding_dim)
-#         self.dropout = nn.Dropout(0.1)
-
-#     def forward(self, x):
-#         return self.fc2(self.dropout(F.relu(self.fc1(x))))
-
-# # 编码器层（Encoder Layer）
-# class EncoderLayer(nn.Module):
-#     def __init__(self, embedding_dim, num_heads, hidden_dim):
-#         super(EncoderLayer, self).__init__()
-#         self.self_attention = MultiHeadAttention(embedding_dim, num_heads)
-#         self.norm1 = nn.LayerNorm(embedding_dim)
-#         self.ffn = FeedForward(embedding_dim, hidden_dim)
-#         self.norm2 = nn.LayerNorm(embedding_dim)
-#         self.dropout = nn.Dropout(0.1)
-
-#     def forward(self, x, mask=None):
-#         # 自注意力层
-#         attn_output = self.self_attention(x, mask)
-#         x = self.norm1(x + self.dropout(attn_output))
-
-#         # 前馈神经网络层
-#         ffn_output = self.ffn(x)
-#         x = self.norm2(x + self.dropout(ffn_output))
-
-#         return x
-
-# # 解码器层（Decoder Layer）
-# class DecoderLayer(nn.Module):
-#     def __init__(self, embedding_dim, num_heads, hidden_dim):
-#         super(DecoderLayer, self).__init__()
-#         self.self_attention = MultiHeadAttention(embedding_dim, num_heads)
-#         self.encoder_attention = MultiHeadAttention(embedding_dim, num_heads)
-#         self.norm1 = nn.LayerNorm(embedding_dim)
-#         self.norm2 = nn.LayerNorm(embedding_dim)
-#         self.ffn = FeedForward(embedding_dim, hidden_dim)
-#         self.norm3 = nn.LayerNorm(embedding_dim)
-#         self.dropout = nn.Dropout(0.1)
-
-#     def forward(self, x, encoder_output, src_mask=None, tgt_mask=None):
-#         # 自注意力层
-#         self_attn_output = self.self_attention(x, tgt_mask)
-#         x = self.norm1(x + self.dropout(self_attn_output))
-
-#         # 编码器-解码器注意力层
-#         encoder_attn_output = self.encoder_attention(x, encoder_output)
-#         x = self.norm2(x + self.dropout(encoder_attn_output))
-
-#         # 前馈神经网络层
-#         ffn_output = self.ffn(x)
-#         x = self.norm3(x + self.dropout(ffn_output))
-
-#         return x
-
-# # Transformer 编码器（Encoder）
-# class TransformerEncoder(nn.Module):
-#     def __init__(self, vocab_size, embedding_dim, num_heads, hidden_dim, num_layers, max_len=5000):
-#         super(TransformerEncoder, self).__init__()
-#         self.embedding = nn.Embedding(vocab_size, embedding_dim)
-#         self.pos_encoding = PositionalEncoding(embedding_dim, max_len)
-#         self.layers = nn.ModuleList([
-#             EncoderLayer(embedding_dim, num_heads, hidden_dim) for _ in range(num_layers)
-#         ])
-
-#     def forward(self, x, mask=None):
-#         x = self.embedding(x)
-#         x = self.pos_encoding(x)
-#         for layer in self.layers:
-#             x = layer(x, mask)
-#         return x
-
-# # Transformer 解码器（Decoder）
-# class TransformerDecoder(nn.Module):
-#     def __init__(self, vocab_size, embedding_dim, num_heads, hidden_dim, num_layers, max_len=5000):
-#         super(TransformerDecoder, self).__init__()
-#         self.embedding = nn.Embedding(vocab_size, embedding_dim)
-#         self.pos_encoding = PositionalEncoding(embedding_dim, max_len)
-#         self.layers = nn.ModuleList([
-#             DecoderLayer(embedding_dim, num_heads, hidden_dim) for _ in range(num_layers)
-#         ])
-
-#     def forward(self, x, encoder_output, src_mask=None, tgt_mask=None):
-#         x = self.embedding(x)
-#         x = self.pos_encoding(x)
-#         for layer in self.layers:
-#             x = layer(x, encoder_output, src_mask, tgt_mask)
-#         return x
-
-# # 完整的 Transformer 模型（Encoder + Decoder）
-# class Transformer(nn.Module):
-#     def __init__(self, vocab_size, embedding_dim, num_heads, hidden_dim, num_layers, max_len=5000):
-#         super(Transformer, self).__init__()
-#         self.encoder = TransformerEncoder(vocab_size, embedding_dim, num_heads, hidden_dim, num_layers, max_len)
-#         self.decoder = TransformerDecoder(vocab_size, embedding_dim, num_heads, hidden_dim, num_layers, max_len)
-#         self.fc_out = nn.Linear(embedding_dim, vocab_size)
-
-#     def forward(self, src, tgt, src_mask=None, tgt_mask=None):
-#         encoder_output = self.encoder(src, src_mask)
-#         decoder_output = self.decoder(tgt, encoder_output, src_mask, tgt_mask)
-#         return self.fc_out(decoder_output)
-
-# # 创建模型实例
-# model = Transformer(vocab_size=10000, embedding_dim=512, num_heads=8, hidden_dim=2048, num_layers=6)
-
-# # 输入示例
-# src = torch.randint(0, 10000, (32, 20))  # 假设一个 batch_size=32，句子长度=20的源序列
-# tgt = torch.randint(0, 10000, (32, 20))  # 目标序列
-
-# # 前向传播
-# output = model(src, tgt)
-
-
-# 模型的训练
-
-# 当前文件夹的测试
-
-if __name__ == "__main__":
-    vocab_size = 10000
-    embedding_dim = 512
-    max_len = 100
-
-    embedding_layer = Embedding(vocab_size, embedding_dim, max_len)
-
-    input_sentences = torch.tensor([
-        [1, 23, 456, 7890, 5],   
-        [34, 5678, 90, 1234, 6]  
-    ])
-
-    output_embeddings = embedding_layer(input_sentences)
-    print("嵌入后的输出形状:", output_embeddings.shape)  # 应该是 (2, 5, 512)
+        输入:
+        - x: (batch_size, seq_len) 词索引
+        - mask: (batch_size, 1, 1, seq_len)，可选
+        
+        输出:
+        - 编码器的输出 (batch_size, seq_len, d_model)
+        """
+        x = self.embedding(x)  # 词嵌入 + 位置编码
+        
+        for layer in self.layers:
+            x = layer(x, mask)  # 通过每一层编码器
+        
+        return x

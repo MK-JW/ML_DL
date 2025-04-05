@@ -152,4 +152,3 @@ if __name__ == "__main__":
     print("输入K: ", K.shape)
     print("输入V: ", V.shape)
     print("输出: ", output.shape)
-
