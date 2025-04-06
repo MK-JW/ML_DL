@@ -10,6 +10,14 @@ import torch.nn.functional as F
 
 
     ## 词嵌入与位置编码
+
+"对于多维时间序列的输入情况，这里面是可以不需要进行词嵌入的"
+"可以对输入的原始的数据(batch_size,sql_len,features_num)进行线性变换nn.linear(features_num, model_dim)"
+"然后再进行位置编码positional_encoding"
+
+"下面的代码是需要对词表进行词嵌入与位置编码的,这里面的词嵌入与上面的线性变换很像，就像是提取特征一样"
+
+
 class Embedding(nn.Module):
 
 
@@ -18,7 +26,7 @@ class Embedding(nn.Module):
         词嵌入类，支持共享词嵌入和位置编码。
         
         参数:
-        - vocab_size: 词汇表大小   总共有多少个词
+        - vocab_size: 词汇表大小   
         - embedding_dim: 词嵌入维度  每一个词转换为向量的维度大小
         - max_len: 句子最大长度（用于位置编码） 一次识别最多多少个词,少会padding,多会忽略
         - shared_weight: 可选，是否共享已有的嵌入层 (nn.Embedding)
@@ -56,7 +64,7 @@ class Embedding(nn.Module):
         - 词嵌入 + 位置编码
         输入:
         - input_ids: (batch_size, seq_len) 形状的张量，表示词索引
-        这里面的seq_len是你数据实际输入时候的长度,它可以比句子最大长度max_len要大,也可以小一些
+        这里面的seq_len是你数据实际输入时候的长度,它小于等于max_len
         
         输出:
         - 嵌入后的张量，形状为 (batch_size, seq_len, embedding_dim)
@@ -101,6 +109,7 @@ class MultiHeadAttention(nn.Module):
 
     def scaled_dot_product_attention(self, Q, K, V, mask=None):
         # Q, K, V: [batch, heads, seq_len, depth]
+        #attention_output = softmax(Q*K/sqrt(d_k))*V
         d_k = Q.size(-1)
         scores = torch.matmul(Q, K.transpose(-2, -1)) / torch.sqrt(torch.tensor(d_k, dtype=torch.float32, device=Q.device))
 
@@ -136,6 +145,9 @@ class MultiHeadAttention(nn.Module):
         V = self.W_v(V)
 
         # 拆分多头
+        "Q, K, V: [batch_size, heads, seq_len, depth]"
+        "后续计算需要将多个头的维度进行合并"
+
         Q = self.split_heads(Q, batch_size)
         K = self.split_heads(K, batch_size)
         V = self.split_heads(V, batch_size)
@@ -144,8 +156,12 @@ class MultiHeadAttention(nn.Module):
         attn_output = self.scaled_dot_product_attention(Q, K, V, mask)
 
         # 合并多头输出
-        attn_output = attn_output.permute(0, 2, 1, 3).contiguous()
+        attn_output = attn_output.permute(0, 2, 1, 3).contiguous()  # 调整维度为[batch_size, seq_len, num_heads, depth]，并转换为连续张量
+        # print("attn_output_multiheads:", attn_output.shape)
+        # print("attn_output_multiheads:", attn_output[1, :, :, :])
         attn_output = attn_output.view(batch_size, -1, self.d_model)
+        # print("attn_output_mergedheads:", attn_output.shape)
+        # print("attn_output_mergedheads:", attn_output[1, :, :])
 
         # 输出线性层
         output = self.W_o(attn_output)
@@ -160,8 +176,11 @@ class MultiHeadAttention(nn.Module):
 
     ## 前馈层（MLP：非线性激活+线性层）
 class FeedForward(nn.Module):
-
-
+    """
+    dff: 前馈网络中间隐藏层的大小
+    d_model: 输入数据的维度embeding_dim (input_dim)
+    dropout: 正则化参数
+    """
     def __init__(self, d_model, d_ff, dropout=0.1):
     
         super(FeedForward, self).__init__()
@@ -248,7 +267,6 @@ class Encoder(nn.Module):
         - num_heads: 多头注意力的头数
         - d_ff: 前馈网络的隐藏层维度
         - max_len: 句子的最大长度
-        - dropout: dropout 率
         """
         super(Encoder, self).__init__()
 
