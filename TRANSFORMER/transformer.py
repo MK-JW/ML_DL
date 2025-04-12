@@ -308,6 +308,7 @@ class Embedding(nn.Module):
     ## 多头注意力机制（可学习动态维度分配）
 class MultiHeadAttention(nn.Module):
 
+
     def __init__(self, d_model, num_heads):
         super(MultiHeadAttention, self).__init__()
         self.d_model = d_model
@@ -325,6 +326,7 @@ class MultiHeadAttention(nn.Module):
         self.layer_norm = nn.LayerNorm(d_model)
 
 
+
     def forward(self, query, key=None, value=None, mask=None):
         if key is None:
             key = query
@@ -334,15 +336,37 @@ class MultiHeadAttention(nn.Module):
         B, T, _ = query.size()
 
 
-        # === Step 1: 计算各 head 的维度比例 ===
+        # === Step 1: 动态维度分配（带最小维度限制）===
         head_ratios = F.softmax(self.head_weight_logits, dim=0)  # [num_heads]
-        head_dims_float = head_ratios * self.d_model             # 连续值 [num_heads]
-        head_dims = [int(round(dim.item())) for dim in head_dims_float]  # 四舍五入
-        total_dim = sum(head_dims)
+        raw_dims = head_ratios * self.d_model
 
-        # 修正维度误差，使其总和等于 d_model
-        diff = self.d_model - total_dim
-        head_dims[0] += diff  # 把误差补到第一个 head 上
+        min_dim = 8
+        min_total = min_dim * self.num_heads
+        if min_total > self.d_model:
+            raise ValueError(f"Minimum total head dim {min_total} exceeds d_model {self.d_model}")
+
+        # 分配剩余维度
+        adjustable_dim = self.d_model - min_total
+        adjustable_ratios = head_ratios / head_ratios.sum()
+        adjustable_dims = adjustable_ratios * adjustable_dim
+
+        # 加上最小值，得到最终 float 维度
+        head_dims_float = adjustable_dims + min_dim
+
+        # 离散化（floor + 残差调和）
+        head_dims = torch.floor(head_dims_float).int().tolist()
+        total = sum(head_dims)
+        diff = self.d_model - total
+
+        if diff != 0:
+            residuals = [(head_dims_float[i] - head_dims[i]).item() for i in range(self.num_heads)]
+            sorted_indices = sorted(range(self.num_heads), key=lambda i: -residuals[i]) if diff > 0 \
+                           else sorted(range(self.num_heads), key=lambda i: residuals[i])
+            for i in range(abs(diff)):
+                head_dims[sorted_indices[i]] += 1 if diff > 0 else -1
+
+        assert sum(head_dims) == self.d_model, "最终 head_dims 总和必须等于 d_model"
+
 
 
         # === Step 2: 投影到 d_model 维度 ===
