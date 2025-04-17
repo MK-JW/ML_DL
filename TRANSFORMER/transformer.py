@@ -3,6 +3,7 @@ __author__ = 'minjinwu'
 import math
 import torch
 import torch.nn as nn
+import torch.utils.data as Data
 import torch.nn.functional as F
 
 
