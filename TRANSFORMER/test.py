@@ -4,9 +4,9 @@ import pandas as pd
 import torch.nn as nn 
 import torch.optim as optim
 import torch.utils.data as Data
-from transformer_struct import train
-from transformer_struct import test
-from transformer_struct import Transformer
+from debug import train
+from debug import test
+from debug import Transformer
 
 
 import numpy as np
@@ -51,11 +51,12 @@ if __name__ == '__main__':
     max_len = 512
     dropout = 0.1
 
-    Epoch = 10
+    Epoch = 5
     batch_size = 32
     lr = 0.0001
     src_len = 20  # 已知前20天的数据
-    tgt_len = 10  # 预测后10天的数据
+    tgt_len = 11  # 预测后10天的数据(采用自回归方式)
+    pre_len = 10  # 预测的数据数
     # num_samples = 100  # 模拟训练集大小
 
     # 创建模型
@@ -90,7 +91,7 @@ if __name__ == '__main__':
     # 调用函数
     train_src, train_tgt = process_and_concat(train_files, features_num, src_len, tgt_len)
     test_src, test_tgt = process_and_concat(test_files, features_num, src_len, tgt_len)
-    print(train_src)
+    # print(train_src)
     print(train_src.shape)
     print(train_tgt.shape)
 
@@ -102,8 +103,9 @@ if __name__ == '__main__':
 
     #开始训练
     for epoch in range(1, Epoch + 1):
-        train(model, train_loader, criterion, optimizer, epoch, device)
-        test(model, test_loader, criterion, device)
-
+        train(model, train_loader, criterion, optimizer, epoch, device, pre_len)
+    
+    # 模型测试
+    test(model, test_loader, criterion, device, pre_len)
     # 训练模型
     # train_transformer(model, train_data, embedding_dim, num_epochs=5)
