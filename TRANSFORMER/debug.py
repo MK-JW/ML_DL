@@ -73,236 +73,236 @@ class Embedding(nn.Module):
 
 
 
-#     ## 多头注意力机制（固定策略分配）
-# class MultiHeadAttention(nn.Module):
-
-
-#     def __init__(self, d_model, num_heads, strategy= 'equal', dropout=0.1):
-#         super(MultiHeadAttention, self).__init__() 
-#         self.d_model = d_model
-#         self.num_heads = num_heads
-#         self.strategy = strategy
-
-#         # 计算每个头的维度
-#         self.head_dims = self._get_head_dims(d_model, num_heads, strategy)
-#         assert sum(self.head_dims) == d_model, f"Head dims sum {sum(self.head_dims)} must equal d_model {d_model}"
-
-#         # 为每个头分别初始化 Q, K, V 的线性层
-#         self.q_linears = nn.ModuleList([
-#             nn.Linear(d_model, dim) for dim in self.head_dims
-#         ])
-#         self.k_linears = nn.ModuleList([
-#             nn.Linear(d_model, dim) for dim in self.head_dims
-#         ])
-#         self.v_linears = nn.ModuleList([
-#             nn.Linear(d_model, dim) for dim in self.head_dims
-#         ])
-#         # print(self.q_linears)
-
-#         # 合并后的输出映射层
-#         self.linear_out = nn.Linear(d_model, d_model)
-#         self.layer_norm = nn.LayerNorm(d_model)
-#         self.dropout = nn.Dropout(dropout)
-
-#     def _get_head_dims(self, d_model, num_heads, strategy):
-#         if strategy == 'equal':
-#             return [d_model // num_heads] * num_heads
-#         elif strategy == 'arithmetic':
-#             # 等差：例如 1, 2, ..., n，再归一化到 d_model
-#             base = torch.arange(1, num_heads + 1, dtype=torch.float)
-#         elif strategy == 'geometric':
-#             # 等比：例如 1, 2, 4, 8...
-#             base = torch.tensor([2 ** i for i in range(num_heads)], dtype=torch.float)
-#         elif strategy == 'fibonacci':
-#             base = torch.tensor(self._fibonacci_seq(num_heads), dtype=torch.float)
-#         else:
-#             raise ValueError(f"Unknown strategy {strategy}")
-
-
-#         # 按比例分配到 d_model 上
-#         base = base / base.sum() * d_model
-#         base = base.round().int()
-
-#         # 调整总和误差（补偿/削减）
-#         while base.sum() < d_model:
-#             base[base.argmin()] += 1
-#         while base.sum() > d_model:
-#             base[base.argmax()] -= 1
-
-#         return base.tolist()
-
-
-#     def _fibonacci_seq(self, n):
-#         seq = [1, 1]
-#         while len(seq) < n:
-#             seq.append(seq[-1] + seq[-2])
-#         return seq[:n]
-
-
-#     def forward(self, query, key=None, value=None, mask=None, need_weights=False):
-#         # print("query_shape:", query.shape)
-
-#         if key == None: key = query
-#         if value == None: value = query
-
-#         residual = query # 残差连接，这里面是保存了线性变换之前的Q（自注意力机制）
-
-#         batch_size, seq_len, _ = query.size()
-#         attn_outputs = []
-#         attn_weights = []
-
-#         # 预处理 mask（只做一次）
-#         use_mask = mask is not None
-#         if use_mask:
-#             if mask.dim() == 4:
-#                 mask = mask.squeeze(1).squeeze(1)
-#             elif mask.dim() == 3:
-#                 pass
-#             else:
-#                 raise ValueError(f"Unsupported mask shape: {mask.shape}")
-
-
-#         for i in range(self.num_heads):
-#             q = self.q_linears[i](query)  # [batch, seq_len, head_dim]
-#             k = self.k_linears[i](key)
-#             v = self.v_linears[i](value)
-#             # print("q shape:", q.shape)
-#             # print("k shape:", k.shape)
-#             # print("v shape:", v.shape)
-#             # 缩放点积注意力
-#             scores = torch.matmul(q, k.transpose(-2, -1)) / (self.head_dims[i] ** 0.5)
-#             # print("score_shape:", scores.shape)
-
-#             if use_mask:
-#                 if mask.dim() == 2:
-#                     scores = scores.masked_fill(mask.unsqueeze(1) == 0, float('-inf'))
-#                 elif mask.dim() == 3:
-#                     scores = scores.masked_fill(mask == 0, float('-inf'))
-
-
-#             attn = F.softmax(scores, dim=-1)
-#             attn = self.dropout(attn)
-#             output = torch.matmul(attn, v)  # [batch, seq_len, head_dim]
-#             attn_weights.append(attn)
-#             attn_outputs.append(output)
-#             # print(f"Head {i}:")
-#             # print("attn shape:", attn.shape)
-#             # print("output shape:", output.shape)
-
-
-#         # print("attn_outputs[0]_shape:", attn_outputs[0].shape)
-#         # 拼接所有头的输出
-#         concat = torch.cat(attn_outputs, dim=-1)  # [batch, seq_len, d_model]
-#         # print(concat.shape)
-#         output = self.linear_out(concat)
-#         output = self.layer_norm(output + residual)
-#         # print("output_shape:", output.shape)
-
-#         if need_weights:
-#             return output, attn_weights
-#         else:
-#             return output
-
-
-
-
-
-    ## 多头注意力机制（可学习动态维度分配）
+    ## 多头注意力机制（固定策略分配）
 class MultiHeadAttention(nn.Module):
 
 
-    def __init__(self, d_model, num_heads, dropout=0.1, return_attn=False):
-        super(MultiHeadAttention, self).__init__()
+    def __init__(self, d_model, num_heads, strategy= 'equal', dropout=0.1):
+        super(MultiHeadAttention, self).__init__() 
         self.d_model = d_model
         self.num_heads = num_heads
-        self.return_attn = return_attn
+        self.strategy = strategy
 
-        # 可学习的维度权重 logits（通过 softmax 分配 head 维度比例）
-        self.head_weight_logits = nn.Parameter(torch.randn(num_heads))
+        # 计算每个头的维度
+        self.head_dims = self._get_head_dims(d_model, num_heads, strategy)
+        assert sum(self.head_dims) == d_model, f"Head dims sum {sum(self.head_dims)} must equal d_model {d_model}"
 
-        # 公共线性变换（先做统一映射，后分配 head_dim）
-        self.q_linear = nn.Linear(d_model, d_model)
-        self.k_linear = nn.Linear(d_model, d_model)
-        self.v_linear = nn.Linear(d_model, d_model)
+        # 为每个头分别初始化 Q, K, V 的线性层
+        self.q_linears = nn.ModuleList([
+            nn.Linear(d_model, dim) for dim in self.head_dims
+        ])
+        self.k_linears = nn.ModuleList([
+            nn.Linear(d_model, dim) for dim in self.head_dims
+        ])
+        self.v_linears = nn.ModuleList([
+            nn.Linear(d_model, dim) for dim in self.head_dims
+        ])
+        # print(self.q_linears)
 
-        self.final_linear = nn.Linear(d_model, d_model)
+        # 合并后的输出映射层
+        self.linear_out = nn.Linear(d_model, d_model)
         self.layer_norm = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
 
+    def _get_head_dims(self, d_model, num_heads, strategy):
+        if strategy == 'equal':
+            return [d_model // num_heads] * num_heads
+        elif strategy == 'arithmetic':
+            # 等差：例如 1, 2, ..., n，再归一化到 d_model
+            base = torch.arange(1, num_heads + 1, dtype=torch.float)
+        elif strategy == 'geometric':
+            # 等比：例如 1, 2, 4, 8...
+            base = torch.tensor([2 ** i for i in range(num_heads)], dtype=torch.float)
+        elif strategy == 'fibonacci':
+            base = torch.tensor(self._fibonacci_seq(num_heads), dtype=torch.float)
+        else:
+            raise ValueError(f"Unknown strategy {strategy}")
 
 
-    def forward(self, query, key=None, value=None, mask=None):
-        if key is None: key = query
-        if value is None: value = query
+        # 按比例分配到 d_model 上
+        base = base / base.sum() * d_model
+        base = base.round().int()
 
-        B, T, _ = query.size()
+        # 调整总和误差（补偿/削减）
+        while base.sum() < d_model:
+            base[base.argmin()] += 1
+        while base.sum() > d_model:
+            base[base.argmax()] -= 1
 
-
-        # === Step 1: 动态维度分配 ===
-        head_ratios = F.softmax(self.head_weight_logits, dim=0)
-        min_dim = 8
-        adjustable_dim = self.d_model - min_dim * self.num_heads
-        if adjustable_dim < 0:
-            raise ValueError("d_model太小，无法满足最小维度分配")
-
-        raw_dims = head_ratios * adjustable_dim
-        head_dims_float = raw_dims + min_dim
-        head_dims = torch.floor(head_dims_float).int().tolist()
-
-        # 调整残差
-        diff = self.d_model - sum(head_dims)
-        if diff != 0:
-            residuals = [(head_dims_float[i] - head_dims[i]).item() for i in range(self.num_heads)]
-            sorted_idx = sorted(range(self.num_heads), key=lambda i: -residuals[i] if diff > 0 else residuals[i])
-            for i in range(abs(diff)):
-                head_dims[sorted_idx[i]] += 1 if diff > 0 else -1
-
-        assert sum(head_dims) == self.d_model
+        return base.tolist()
 
 
+    def _fibonacci_seq(self, n):
+        seq = [1, 1]
+        while len(seq) < n:
+            seq.append(seq[-1] + seq[-2])
+        return seq[:n]
 
-        # === Step 2: 投影到 d_model 维度 ===
-        q_all = self.q_linear(query)  # [B, T, d_model]
-        k_all = self.k_linear(key)
-        v_all = self.v_linear(value)
+
+    def forward(self, query, key=None, value=None, mask=None, need_weights=False):
+        # print("query_shape:", query.shape)
+
+        if key == None: key = query
+        if value == None: value = query
+
+        residual = query # 残差连接，这里面是保存了线性变换之前的Q（自注意力机制）
+
+        batch_size, seq_len, _ = query.size()
+        attn_outputs = []
+        attn_weights = []
+
+        # 预处理 mask（只做一次）
+        use_mask = mask is not None
+        if use_mask:
+            if mask.dim() == 4:
+                mask = mask.squeeze(1).squeeze(1)
+            elif mask.dim() == 3:
+                pass
+            else:
+                raise ValueError(f"Unsupported mask shape: {mask.shape}")
 
 
-        # === Step 3: 根据分配的 head_dim 切片 ===
-        head_outputs = []
-        attn_weights_all = [] if self.return_attn else None
-        start = 0
         for i in range(self.num_heads):
-            dim = head_dims[i]
-            q = q_all[:, :, start:start+dim]
-            k = k_all[:, :, start:start+dim]
-            v = v_all[:, :, start:start+dim]
-            start += dim
+            q = self.q_linears[i](query)  # [batch, seq_len, head_dim]
+            k = self.k_linears[i](key)
+            v = self.v_linears[i](value)
+            # print("q shape:", q.shape)
+            # print("k shape:", k.shape)
+            # print("v shape:", v.shape)
+            # 缩放点积注意力
+            scores = torch.matmul(q, k.transpose(-2, -1)) / (self.head_dims[i] ** 0.5)
+            # print("score_shape:", scores.shape)
 
-            scores = torch.matmul(q, k.transpose(-2, -1)) / (dim ** 0.5)  # [B, T, T]
-            if mask is not None:
+            if use_mask:
                 if mask.dim() == 2:
                     scores = scores.masked_fill(mask.unsqueeze(1) == 0, float('-inf'))
                 elif mask.dim() == 3:
                     scores = scores.masked_fill(mask == 0, float('-inf'))
 
+
             attn = F.softmax(scores, dim=-1)
             attn = self.dropout(attn)
+            output = torch.matmul(attn, v)  # [batch, seq_len, head_dim]
+            attn_weights.append(attn)
+            attn_outputs.append(output)
+            # print(f"Head {i}:")
+            # print("attn shape:", attn.shape)
+            # print("output shape:", output.shape)
 
-            output = torch.matmul(attn, v)  # [B, T, dim]
-            head_outputs.append(output)
-            if self.return_attn:
-                attn_weights_all.append(attn.detach())
 
+        # print("attn_outputs[0]_shape:", attn_outputs[0].shape)
+        # 拼接所有头的输出
+        concat = torch.cat(attn_outputs, dim=-1)  # [batch, seq_len, d_model]
+        # print(concat.shape)
+        output = self.linear_out(concat)
+        output = self.layer_norm(output + residual)
+        # print("output_shape:", output.shape)
 
-        # === Step 4: 拼接所有 head 输出 ===
-        concat = torch.cat(head_outputs, dim=-1)  # [B, T, d_model]
-        output = self.final_linear(concat)
-        output = self.layer_norm(output + query)
-        
-        if self.return_attn:
-            return output, attn_weights_all
+        if need_weights:
+            return output, attn_weights
         else:
             return output
+
+
+
+
+
+#     ## 多头注意力机制（可学习动态维度分配）
+# class MultiHeadAttention(nn.Module):
+
+
+#     def __init__(self, d_model, num_heads, dropout=0.1, return_attn=False):
+#         super(MultiHeadAttention, self).__init__()
+#         self.d_model = d_model
+#         self.num_heads = num_heads
+#         self.return_attn = return_attn
+
+#         # 可学习的维度权重 logits（通过 softmax 分配 head 维度比例）
+#         self.head_weight_logits = nn.Parameter(torch.randn(num_heads))
+
+#         # 公共线性变换（先做统一映射，后分配 head_dim）
+#         self.q_linear = nn.Linear(d_model, d_model)
+#         self.k_linear = nn.Linear(d_model, d_model)
+#         self.v_linear = nn.Linear(d_model, d_model)
+
+#         self.final_linear = nn.Linear(d_model, d_model)
+#         self.layer_norm = nn.LayerNorm(d_model)
+#         self.dropout = nn.Dropout(dropout)
+
+
+
+#     def forward(self, query, key=None, value=None, mask=None):
+#         if key is None: key = query
+#         if value is None: value = query
+
+#         B, T, _ = query.size()
+
+
+#         # === Step 1: 动态维度分配 ===
+#         head_ratios = F.softmax(self.head_weight_logits, dim=0)
+#         min_dim = 8
+#         adjustable_dim = self.d_model - min_dim * self.num_heads
+#         if adjustable_dim < 0:
+#             raise ValueError("d_model太小，无法满足最小维度分配")
+
+#         raw_dims = head_ratios * adjustable_dim
+#         head_dims_float = raw_dims + min_dim
+#         head_dims = torch.floor(head_dims_float).int().tolist()
+
+#         # 调整残差
+#         diff = self.d_model - sum(head_dims)
+#         if diff != 0:
+#             residuals = [(head_dims_float[i] - head_dims[i]).item() for i in range(self.num_heads)]
+#             sorted_idx = sorted(range(self.num_heads), key=lambda i: -residuals[i] if diff > 0 else residuals[i])
+#             for i in range(abs(diff)):
+#                 head_dims[sorted_idx[i]] += 1 if diff > 0 else -1
+
+#         assert sum(head_dims) == self.d_model
+
+
+
+#         # === Step 2: 投影到 d_model 维度 ===
+#         q_all = self.q_linear(query)  # [B, T, d_model]
+#         k_all = self.k_linear(key)
+#         v_all = self.v_linear(value)
+
+
+#         # === Step 3: 根据分配的 head_dim 切片 ===
+#         head_outputs = []
+#         attn_weights_all = [] if self.return_attn else None
+#         start = 0
+#         for i in range(self.num_heads):
+#             dim = head_dims[i]
+#             q = q_all[:, :, start:start+dim]
+#             k = k_all[:, :, start:start+dim]
+#             v = v_all[:, :, start:start+dim]
+#             start += dim
+
+#             scores = torch.matmul(q, k.transpose(-2, -1)) / (dim ** 0.5)  # [B, T, T]
+#             if mask is not None:
+#                 if mask.dim() == 2:
+#                     scores = scores.masked_fill(mask.unsqueeze(1) == 0, float('-inf'))
+#                 elif mask.dim() == 3:
+#                     scores = scores.masked_fill(mask == 0, float('-inf'))
+
+#             attn = F.softmax(scores, dim=-1)
+#             attn = self.dropout(attn)
+
+#             output = torch.matmul(attn, v)  # [B, T, dim]
+#             head_outputs.append(output)
+#             if self.return_attn:
+#                 attn_weights_all.append(attn.detach())
+
+
+#         # === Step 4: 拼接所有 head 输出 ===
+#         concat = torch.cat(head_outputs, dim=-1)  # [B, T, d_model]
+#         output = self.final_linear(concat)
+#         output = self.layer_norm(output + query)
+        
+#         if self.return_attn:
+#             return output, attn_weights_all
+#         else:
+#             return output
 
 
 
@@ -558,10 +558,16 @@ def train(model, dataloader, criterion, optimizer, epoch, device, pred_len):
 
     for batch_idx, (x, y) in enumerate(dataloader):
         x, y = x.to(device), y.to(device)  # x: [B, T_src, D], y: [B, T_tgt+1, 1]
+        # print(x[0:1, :, :].shape)
+        # print(x[0:1, :, :])
 
         # 构造解码器输入 & 输出（shift 1）
         tgt_input = y[:, :1, :]         # [B, 1, 1] 只取目标序列的第一个时间步作为解码器的输入
         tgt_output = y[:, 1:, :]        # [B, T_tgt, 1] 目标序列的剩余作为输出
+        # print("tgt_input.shape:", tgt_input.shape)
+        # print(tgt_input[0:1, :, :])
+        # print("tgt_output.shape:", tgt_output.shape)
+        # print(tgt_output[0:1, :, :])
 
         # 前向传播
         optimizer.zero_grad()
@@ -569,20 +575,29 @@ def train(model, dataloader, criterion, optimizer, epoch, device, pred_len):
         # 用多步预测的方式进行训练
         decoder_input = tgt_input
         predictions = []
-        for _ in range(pred_len):  # 每次预测一个时间步
+        for i in range(pred_len):  # 每次预测一个时间步
             output = model(x, decoder_input)     # 模型预测
             predictions.append(output[:, -1:, :])  # 只保留每次预测的最后一个时间步
 
-            # 更新decoder_input，用预测的值作为下一次输入
-            decoder_input = torch.cat([decoder_input, output[:, -1:, :]], dim=1)
+            # print("output.shape:", output.shape)
+            # print(output)
+            # print("x.shape:", x.shape)
+            # print("x:", x)
+            # print("deconder_input:", decoder_input)
+
+            # 更新decoder_input，用已知的标签值进行concatenate(区别于test)
+            decoder_input = torch.cat([decoder_input, tgt_output[:, i:i+1, :]], dim=1)
+        
+        # print(output.shape)
 
         # 只取最后 pred_len 个时间步的预测
         predictions = torch.cat(predictions, dim=1)  # 合并所有时间步的预测
+        # break
 
         # 维度检查（强烈推荐）
         assert predictions.shape == tgt_output.shape, \
             f"Predictions shape {predictions.shape} != Target shape {tgt_output.shape}"
-
+        
 
         # 计算损失
         loss = criterion(predictions, tgt_output)
