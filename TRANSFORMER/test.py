@@ -24,12 +24,13 @@ def process_and_concat(file_list, features_num, src_len, tgt_len):
 
     for file in file_list:
         data = pd.read_csv(file).iloc[:, 1:].astype('float32')
+        data = data.sample(frac=0.7)  # 调控一下用于训练与测试的样本大小，减少训练时间方便调参
         src_seq = []
         tgt_seq = []
 
         for i in range(len(data) - src_len - tgt_len):
             src_seq.append(data.iloc[i:i+src_len, 0:features_num].values)
-            tgt_seq.append(data.iloc[i+src_len:i+src_len+tgt_len, -1].values.reshape(-1, 1))
+            tgt_seq.append(data.iloc[i+src_len-1:i+src_len+tgt_len-1, -1].values.reshape(-1, 1))
 
         src_seq = torch.tensor(np.array(src_seq))
         tgt_seq = torch.tensor(np.array(tgt_seq))
@@ -42,21 +43,22 @@ def process_and_concat(file_list, features_num, src_len, tgt_len):
 
 # ----------- 主程序 -----------  
 if __name__ == '__main__':
-    
-    features_num = 6
-    embedding_dim = 512
-    num_layers = 6
-    num_heads = 8
-    d_ff = 2048
-    max_len = 512
-    dropout = 0.1
 
-    Epoch = 5
-    batch_size = 32
-    lr = 0.0001
+    Epoch = 150
+    batch_size = 64
+    lr = 0.001
     src_len = 20  # 已知前20天的数据
     tgt_len = 11  # 预测后10天的数据(采用自回归方式)
     pre_len = 10  # 预测的数据数
+
+    features_num = 6
+    embedding_dim = 128
+    num_layers = 3
+    num_heads = 4
+    d_ff = 512
+    max_len = 512
+    dropout = 0.2
+
     # num_samples = 100  # 模拟训练集大小
 
     # 创建模型
@@ -79,13 +81,11 @@ if __name__ == '__main__':
     # 训练集文件
     train_files = [
         'D:/Mjw/desktop/研究生学习/ML与DL/linear_regression_py/TRANSFORMER/ETTh1.csv',
-        'D:/Mjw/desktop/研究生学习/ML与DL/linear_regression_py/TRANSFORMER/ETTh2.csv'
     ]
 
     # 测试集文件
     test_files = [
         'D:/Mjw/desktop/研究生学习/ML与DL/linear_regression_py/TRANSFORMER/ETTm1.csv',
-        'D:/Mjw/desktop/研究生学习/ML与DL/linear_regression_py/TRANSFORMER/ETTm2.csv'
     ]
 
     # 调用函数
@@ -97,8 +97,8 @@ if __name__ == '__main__':
 
     train_dataset = Data.TensorDataset(train_src, train_tgt)
     test_dataset = Data.TensorDataset(test_src, test_tgt)
-    train_loader = Data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False)
-    test_loader = Data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
+    train_loader = Data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = Data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=True)
 
 
     #开始训练
