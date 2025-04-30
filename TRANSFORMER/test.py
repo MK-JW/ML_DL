@@ -24,7 +24,7 @@ def process_and_concat(file_list, features_num, src_len, tgt_len):
 
     for file in file_list:
         data = pd.read_csv(file).iloc[:, 1:].astype('float32')
-        data = data.sample(frac=0.7)  # 调控一下用于训练与测试的样本大小，减少训练时间方便调参
+        # data = data.sample(frac=0.7)  # 调控一下用于训练与测试的样本大小，减少训练时间方便调参
         src_seq = []
         tgt_seq = []
 
@@ -44,12 +44,12 @@ def process_and_concat(file_list, features_num, src_len, tgt_len):
 # ----------- 主程序 -----------  
 if __name__ == '__main__':
 
-    Epoch = 150
+    Epoch = 50
     batch_size = 64
     lr = 0.001
-    src_len = 20  # 已知前20天的数据
-    tgt_len = 11  # 预测后10天的数据(采用自回归方式)
-    pre_len = 10  # 预测的数据数
+    src_len = 10  # 已知前20天的数据
+    tgt_len = 6   # 预测后10天的数据(采用自回归方式)
+    pre_len = 5  # 预测的数据数
 
     features_num = 6
     embedding_dim = 128
@@ -76,6 +76,8 @@ if __name__ == '__main__':
     model = Transformer(features_num, embedding_dim, num_layers, num_heads, d_ff, max_len, dropout).to(device)
     criterion = nn.MSELoss()  # 均方误差用于回归
     optimizer = optim.Adam(model.parameters(), lr=lr)
+
+
     
     #加载数据
     # 训练集文件
@@ -103,9 +105,10 @@ if __name__ == '__main__':
 
     #开始训练
     for epoch in range(1, Epoch + 1):
+
         train(model, train_loader, criterion, optimizer, epoch, device, pre_len)
-    
+
     # 模型测试
     test(model, test_loader, criterion, device, pre_len)
     # 训练模型
-    # train_transformer(model, train_data, embedding_dim, num_epochs=5)
+    # train_transformer(model, train_data, embedding_dim, num_epochs=5) 
