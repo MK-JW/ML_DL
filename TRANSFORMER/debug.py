@@ -218,7 +218,7 @@ class MultiHeadAttention(nn.Module):
 #         self.return_attn = return_attn
 
 #         # 可学习的维度权重 logits（通过 softmax 分配 head 维度比例）
-#         self.head_weight_logits = nn.Parameter(torch.randn(num_heads))
+#         self.head_weight_logits = nn.Parameter(torch.randn(num_heads), requires_grad=True)
 
 #         # 公共线性变换（先做统一映射，后分配 head_dim）
 #         self.q_linear = nn.Linear(d_model, d_model)
@@ -555,6 +555,10 @@ class Transformer(nn.Module):
 def train(model, dataloader, criterion, optimizer, epoch, device, pred_len):
     model.train()
     total_loss = 0.0
+    # for name, param in model.named_parameters():
+    #     if "head_weight_logits" in name:
+    #         print(f"[OK] Found: {name}, shape = {param.shape}, grad:{param.grad}")
+
 
     for batch_idx, (x, y) in enumerate(dataloader):
         x, y = x.to(device), y.to(device)  # x: [B, T_src, D], y: [B, T_tgt+1, 1]
@@ -611,6 +615,7 @@ def train(model, dataloader, criterion, optimizer, epoch, device, pred_len):
 
     avg_loss = total_loss / len(dataloader)
     print(f"[Epoch {epoch}] Train Avg Loss: {avg_loss:.4f}")
+    pass
 
 
 
