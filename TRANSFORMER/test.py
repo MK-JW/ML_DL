@@ -47,8 +47,8 @@ if __name__ == '__main__':
     Epoch = 50
     batch_size = 64
     lr = 0.001
-    src_len = 10  # 已知前20天的数据
-    tgt_len = 6   # 预测后10天的数据(采用自回归方式)
+    src_len = 10  # 已知前10天的数据
+    tgt_len = 6   # 预测后5天的数据(采用自回归方式)
     pre_len = 5  # 预测的数据数
 
     features_num = 6
@@ -57,7 +57,7 @@ if __name__ == '__main__':
     num_heads = 4
     d_ff = 512
     max_len = 512
-    dropout = 0.2
+    dropout = 0.2 
 
     # num_samples = 100  # 模拟训练集大小
 
@@ -99,8 +99,8 @@ if __name__ == '__main__':
 
     train_dataset = Data.TensorDataset(train_src, train_tgt)
     test_dataset = Data.TensorDataset(test_src, test_tgt)
-    train_loader = Data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = Data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=True)
+    train_loader = Data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False)
+    test_loader = Data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
 
     #开始训练

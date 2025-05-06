@@ -209,18 +209,16 @@ class MultiHeadAttention(nn.Module):
 
 #     ## 多头注意力机制（可学习动态维度分配）
 # class MultiHeadAttention(nn.Module):
-
-
 #     def __init__(self, d_model, num_heads, dropout=0.1, return_attn=False):
 #         super(MultiHeadAttention, self).__init__()
 #         self.d_model = d_model
 #         self.num_heads = num_heads
 #         self.return_attn = return_attn
 
-#         # 可学习的维度权重 logits（通过 softmax 分配 head 维度比例）
+#         # 可学习的维度权重 logits（结构保持不变）
 #         self.head_weight_logits = nn.Parameter(torch.randn(num_heads), requires_grad=True)
 
-#         # 公共线性变换（先做统一映射，后分配 head_dim）
+#         # 公共线性变换（完全保持原结构）
 #         self.q_linear = nn.Linear(d_model, d_model)
 #         self.k_linear = nn.Linear(d_model, d_model)
 #         self.v_linear = nn.Linear(d_model, d_model)
@@ -229,45 +227,50 @@ class MultiHeadAttention(nn.Module):
 #         self.layer_norm = nn.LayerNorm(d_model)
 #         self.dropout = nn.Dropout(dropout)
 
-
-
 #     def forward(self, query, key=None, value=None, mask=None):
 #         if key is None: key = query
 #         if value is None: value = query
 
 #         B, T, _ = query.size()
 
-
-#         # === Step 1: 动态维度分配 ===
+#         # === 动态维度分配（保持原始步骤，添加STE）===
+#         # Step 1: 计算基础分配（保持原计算流程）
 #         head_ratios = F.softmax(self.head_weight_logits, dim=0)
 #         min_dim = 8
 #         adjustable_dim = self.d_model - min_dim * self.num_heads
 #         if adjustable_dim < 0:
 #             raise ValueError("d_model太小，无法满足最小维度分配")
 
+#         # 保持原始浮点计算，添加梯度保留
 #         raw_dims = head_ratios * adjustable_dim
 #         head_dims_float = raw_dims + min_dim
-#         head_dims = torch.floor(head_dims_float).int().tolist()
+        
+#         # Step 2: 使用STE的取整（保持原逻辑结构）
+#         head_dims_ste = torch.floor(head_dims_float.detach())  # 前向用floor
+#         head_dims_ste = head_dims_float + (head_dims_ste - head_dims_float).detach()
+#         head_dims = head_dims_ste.int().tolist()  # 转为列表（与原始代码一致）
 
-#         # 调整残差
+#         # Step 3: 残差调整（保持原列表操作，但转为Tensor实现）
 #         diff = self.d_model - sum(head_dims)
 #         if diff != 0:
-#             residuals = [(head_dims_float[i] - head_dims[i]).item() for i in range(self.num_heads)]
-#             sorted_idx = sorted(range(self.num_heads), key=lambda i: -residuals[i] if diff > 0 else residuals[i])
+#             # 保持原残差计算逻辑，但转为Tensor操作
+#             residuals_tensor = head_dims_float - head_dims_ste.detach()
+#             sorted_idx = torch.argsort(
+#                 -residuals_tensor if diff > 0 else residuals_tensor
+#             ).tolist()  # 转为Python列表保持结构
+            
+#             # 保持原始循环调整方式
 #             for i in range(abs(diff)):
 #                 head_dims[sorted_idx[i]] += 1 if diff > 0 else -1
 
+#         # 验证维度（保持原始断言）
 #         assert sum(head_dims) == self.d_model
 
-
-
-#         # === Step 2: 投影到 d_model 维度 ===
+#         # === 后续步骤完全保持原始结构 ===
 #         q_all = self.q_linear(query)  # [B, T, d_model]
 #         k_all = self.k_linear(key)
 #         v_all = self.v_linear(value)
 
-
-#         # === Step 3: 根据分配的 head_dim 切片 ===
 #         head_outputs = []
 #         attn_weights_all = [] if self.return_attn else None
 #         start = 0
@@ -278,7 +281,7 @@ class MultiHeadAttention(nn.Module):
 #             v = v_all[:, :, start:start+dim]
 #             start += dim
 
-#             scores = torch.matmul(q, k.transpose(-2, -1)) / (dim ** 0.5)  # [B, T, T]
+#             scores = torch.matmul(q, k.transpose(-2, -1)) / (dim ** 0.5)
 #             if mask is not None:
 #                 if mask.dim() == 2:
 #                     scores = scores.masked_fill(mask.unsqueeze(1) == 0, float('-inf'))
@@ -287,15 +290,12 @@ class MultiHeadAttention(nn.Module):
 
 #             attn = F.softmax(scores, dim=-1)
 #             attn = self.dropout(attn)
-
-#             output = torch.matmul(attn, v)  # [B, T, dim]
+#             output = torch.matmul(attn, v)
 #             head_outputs.append(output)
 #             if self.return_attn:
 #                 attn_weights_all.append(attn.detach())
 
-
-#         # === Step 4: 拼接所有 head 输出 ===
-#         concat = torch.cat(head_outputs, dim=-1)  # [B, T, d_model]
+#         concat = torch.cat(head_outputs, dim=-1)
 #         output = self.final_linear(concat)
 #         output = self.layer_norm(output + query)
         
@@ -555,10 +555,12 @@ class Transformer(nn.Module):
 def train(model, dataloader, criterion, optimizer, epoch, device, pred_len):
     model.train()
     total_loss = 0.0
+
+    # # 记录初始参数值（用于检查参数更新）
+    # init_head_weights = {}
     # for name, param in model.named_parameters():
     #     if "head_weight_logits" in name:
-    #         print(f"[OK] Found: {name}, shape = {param.shape}, grad:{param.grad}")
-
+    #         init_head_weights[name] = param.data.clone()
 
     for batch_idx, (x, y) in enumerate(dataloader):
         x, y = x.to(device), y.to(device)  # x: [B, T_src, D], y: [B, T_tgt+1, 1]
@@ -605,9 +607,30 @@ def train(model, dataloader, criterion, optimizer, epoch, device, pred_len):
 
         # 计算损失
         loss = criterion(predictions, tgt_output)
-        loss.backward()
-        optimizer.step()
 
+        # # === 反向传播前检查梯度 ===
+        # print("\n=== 反向传播前 ===")
+        # for name, param in model.named_parameters():
+        #     if "head_weights" in name:
+        #         print(f"{name} 梯度状态: {'存在' if param.grad is not None else '无'}")
+
+        loss.backward()
+
+        # # === 反向传播后检查梯度 ===
+        # print("\n=== 反向传播后 ===")
+        # grad_info = {}
+        # for name, param in model.named_parameters():
+        #     if "head_weights" in name:
+        #         grad = param.grad
+        #         grad_exists = grad is not None
+        #         grad_info[name] = {
+        #             "exists": grad_exists,
+        #             "mean": grad.mean().item() if grad_exists else None,
+        #             "max": grad.max().item() if grad_exists else None
+        #         }
+        #         print(f"{name} 梯度均值: {grad.mean().item() if grad_exists else '无'}")
+                
+        optimizer.step()
         total_loss += loss.item()
 
         if (batch_idx + 1) % 10 == 0:
