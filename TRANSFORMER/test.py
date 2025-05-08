@@ -4,10 +4,13 @@ import pandas as pd
 import torch.nn as nn 
 import torch.optim as optim
 import torch.utils.data as Data
-from debug import train
-from debug import test
-from debug import Transformer
+from debug2 import train
+from debug2 import test
+from debug2 import Transformer
 
+# from debug import train
+# from debug import test
+# from debug import Transformer
 
 import numpy as np
 import pandas as pd
@@ -47,14 +50,14 @@ if __name__ == '__main__':
     Epoch = 50
     batch_size = 64
     lr = 0.001
-    src_len = 10  # 已知前20天的数据
-    tgt_len = 6   # 预测后10天的数据(采用自回归方式)
-    pre_len = 5  # 预测的数据数
+    src_len = 15  # 已知前20天的数据
+    tgt_len = 16   # 预测后10天的数据(采用自回归方式)
+    pre_len = 15  # 预测的数据数
 
     features_num = 6
     embedding_dim = 128
     num_layers = 3
-    num_heads = 4
+    num_heads = 6
     d_ff = 512
     max_len = 512
     dropout = 0.2
@@ -73,7 +76,8 @@ if __name__ == '__main__':
     #     tgt = torch.rand(batch_size, tgt_len, features_num)
     #     train_data.append((src, tgt))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = Transformer(features_num, embedding_dim, num_layers, num_heads, d_ff, max_len, dropout).to(device)
+    model = Transformer(features_num, embedding_dim, num_layers, num_heads, d_ff, max_len,\
+                         dropout).to(device)
     criterion = nn.MSELoss()  # 均方误差用于回归
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
@@ -99,8 +103,8 @@ if __name__ == '__main__':
 
     train_dataset = Data.TensorDataset(train_src, train_tgt)
     test_dataset = Data.TensorDataset(test_src, test_tgt)
-    train_loader = Data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = Data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=True)
+    train_loader = Data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False)
+    test_loader = Data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
 
     #开始训练
