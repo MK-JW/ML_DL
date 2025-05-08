@@ -3,18 +3,19 @@ __author__ = 'Minjinwu'
 # import sys
 # print(sys.path)
 import numpy as np
-from data_process.data_normolized import Data_normolized
+from data_process.data_normolized import Data_normalized
 
 
 #执行梯度下降
 class Gradient_descent: 
 
     def __init__(self, x_train, y_train):
+
         (
 
             x_train
 
-        ) = Data_normolized(x_train) 
+        ) = Data_normalized(x_train) 
 
 
         self.x_train = x_train

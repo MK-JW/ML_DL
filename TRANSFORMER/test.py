@@ -4,10 +4,13 @@ import pandas as pd
 import torch.nn as nn 
 import torch.optim as optim
 import torch.utils.data as Data
-from debug import train
-from debug import test
-from debug import Transformer
+from debug2 import train
+from debug2 import test
+from debug2 import Transformer
 
+# from debug import train
+# from debug import test
+# from debug import Transformer
 
 import numpy as np
 import pandas as pd
@@ -54,7 +57,7 @@ if __name__ == '__main__':
     features_num = 6
     embedding_dim = 128
     num_layers = 3
-    num_heads = 4
+    num_heads = 6
     d_ff = 512
     max_len = 512
     dropout = 0.2 
@@ -73,7 +76,8 @@ if __name__ == '__main__':
     #     tgt = torch.rand(batch_size, tgt_len, features_num)
     #     train_data.append((src, tgt))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = Transformer(features_num, embedding_dim, num_layers, num_heads, d_ff, max_len, dropout).to(device)
+    model = Transformer(features_num, embedding_dim, num_layers, num_heads, d_ff, max_len,\
+                         dropout).to(device)
     criterion = nn.MSELoss()  # 均方误差用于回归
     optimizer = optim.Adam(model.parameters(), lr=lr)
 

@@ -86,6 +86,7 @@ q,p = loss.shape
 print(w_k,b_k)
 
 
+print(x_train.shape, y_train.shape)
 # 执行绘图
 if column == 2:
     plt.figure(1)

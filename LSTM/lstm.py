@@ -96,6 +96,7 @@ print(lstm)
 optimizer = torch.optim.Adam(lstm.parameters(), lr=alpha)
 loss_fun = nn.MSELoss()
 
+ 
 # 训练lstm神经网络
 
 for epoch in range(Epoch):

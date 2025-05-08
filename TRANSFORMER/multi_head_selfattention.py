@@ -78,6 +78,7 @@ class DynamicMultiHeadAttention(nn.Module):
             aux_loss = total_loss + 0.1 * min_loss
             return output, aux_loss
         return output
+    
 
     
 

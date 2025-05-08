@@ -7,7 +7,7 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from data_process.data_normolized import Data_normolized
+from data_process.data_normolized import Data_normalized
 from core_function.gradient_descent import Gradient_descent
 
 
@@ -21,7 +21,7 @@ k = 0
 alpha = 0.1
 tol = 1*10**-6
 m,n = x_train.shape
-x_train = Data_normolized(x_train)
+x_train = Data_normalized(x_train)
 x_current = np.zeros((n+1, 1))
 y_prediction = Gradient_descent(x_train, y_train).get_prediction(x_current[0:n,:], x_current[-1, :])
 cost = Gradient_descent(x_train, y_train).get_cost(y_prediction)

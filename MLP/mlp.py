@@ -18,7 +18,7 @@ data_path = os.path.join(current_dir,'..','world-happiness-report-2017.csv')
 data = pd.read_csv(data_path)
 x_train = data[['Economy..GDP.per.Capita.']].values
 y_train = data[['Happiness.Score']].values
-# print(x_train.shape, y_train.shape)
+print(x_train.shape, y_train.shape)
 
 
 # 超参数设置
@@ -78,12 +78,13 @@ for i in range(epoch):
     # loss_history = np.append(loss_history, loss)
     loss_history.append(loss)
 
-print(loss_history)
+
+np.array(loss_history[0]).reshape(-1,1)
 # 结果的可视化
 # print(x_train.shape)
 # x_train = Data_normalized(x_train)
-# plt.figure(1)
-# plt.scatter(x_train, y_train, color = 'b', marker = 'o')
-# plt.figure(2)
-# plt.plot(np.arange(len(loss)), loss, color = 'b')
-# plt.show()
+plt.figure(1)
+plt.scatter(x_train, y_train, color = 'b', marker = 'o')
+plt.figure(2)
+plt.plot(np.arange(len(loss_history[0])), loss_history[0], color = 'b')
+plt.show()
